@@ -11,111 +11,83 @@ import (
 
 const (
 	NewspaperEditSystemPrompt = `
-		You are an expert newspaper editor-in-chief. Your role is to review
-		newspaper editions and ensure they read as cohesive, well-structured
-		publications with consistent tone and no unnecessary repetition between
-		sections.
+		You are an expert newspaper editor. Your role is to review and polish
+		individual newspaper articles so they are clear, well-structured,
+		readable, and written in a professional newspaper tone while preserving
+		the original meaning and factual content.
 		`
 
 	NewspaperEditPrompt = `
-		# Newspaper Edition to Edit
+		# Newspaper Article to Edit
 
-		## Sections
+		## Title
+		{{.Title}}
 
-		{{range $index, $section := .Sections}}
-		### Section {{$index}}: {{$section.Title}}
+		## Paragraphs
 
-		{{range $_, $paragraph := $section.Paragraphs}}
+		{{range $_, $paragraph := .Paragraphs}}
 		{{$paragraph}}
 
 		{{end}}
-		{{end}}
 
 		# Goal
-		Review and edit this newspaper edition to ensure:
-		1. The edition flows cohesively from section to section.
-		2. There is no unnecessary repetition of content between sections.
-		3. Each section contributes unique value and has a clear purpose.
-		4. Transitions between sections are smooth and logical.
-		5. The overall tone and style are consistent and appropriate for a
-		   newspaper.
-		6. Create a title for the newspaper
-		7. Make up a author name for the newspaper
+		Review and edit this single newspaper article to ensure:
+		1. The writing is clear, concise, and easy to follow.
+		2. The tone and style are appropriate for a professional newspaper.
+		3. The structure flows logically from paragraph to paragraph.
+		4. Grammar, spelling, and punctuation are corrected.
+		5. The original facts and meaning are preserved (do not invent new facts).
 
-		Maintain the same structure (title and sections with paragraphs) but
-		refine the content to eliminate redundancy, improve clarity, and enhance
-		readability. If information is repeated across sections, consolidate it
-		appropriately or remove redundant instances.
+		Maintain the same overall structure (a title and a sequence of
+		paragraphs) while refining the language for clarity, style, and
+		readability.
 		`
 )
 
-// EditNewspaper runs a final editing pass over the synthesized newspaper
-// document.
+// EditNewspaper runs a final editing pass over each synthesized newspaper
+// section independently. This keeps prompts small and focused and avoids
+// cross-section context issues.
 func EditNewspaper(ctx context.Context, assistant models.Assistant, doc *models.Document) (*models.Document, error) {
 	slog.InfoContext(ctx, "editing_newspaper")
 
-	prompt, err := BuildPrompt(NewspaperEditPrompt, doc)
-	if err != nil {
-		return nil, fmt.Errorf("failed building newspaper edit prompt: %w", err)
+	if doc == nil {
+		return nil, fmt.Errorf("document is nil")
 	}
 
-	response, err := assistant.StructuredAsk(ctx, NewspaperEditSystemPrompt, *prompt, EditNewspaperSchema())
-	if err != nil {
-		return nil, fmt.Errorf("failed editing newspaper: %w", err)
-	}
+	// Copy the original document so we can mutate sections in place without
+	// touching the caller's instance.
+	editedDoc := *doc
 
-	var editedDoc models.Document
+	for i, section := range doc.Sections {
+		// Build a per-article prompt using just this section's content.
+		prompt, err := BuildPrompt(NewspaperEditPrompt, PromptArgs{
+			"Title":      section.Title,
+			"Paragraphs": section.Paragraphs,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed building newspaper edit prompt for section %d: %w", i, err)
+		}
 
-	if err := json.Unmarshal(response, &editedDoc); err != nil {
-		return nil, fmt.Errorf("failed parsing edited newspaper: %w", err)
+		response, err := assistant.StructuredAsk(ctx, NewspaperEditSystemPrompt, *prompt, NewspaperDocumentSectionSchema())
+		if err != nil {
+			return nil, fmt.Errorf("failed editing newspaper section %d: %w", i, err)
+		}
+
+		var editedSection models.DocumentSection
+
+		if err := json.Unmarshal(response, &editedSection); err != nil {
+			return nil, fmt.Errorf("failed parsing edited newspaper section %d: %w", i, err)
+		}
+
+		editedDoc.Sections[i] = editedSection
 	}
 
 	return &editedDoc, nil
 }
 
+// EditNewspaperSchema previously described a full-document edit response.
+// It is retained for backward compatibility but no longer used now that
+// editing operates on individual sections using NewspaperDocumentSectionSchema.
 func EditNewspaperSchema() map[string]any {
-	// Preserve the original full-document schema used before synthesis was
-	// changed to operate on a per-section basis. Editing still works on the
-	// complete newspaper document (title + sections).
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"title": map[string]any{
-				"type":        "string",
-				"description": "The title of the newspaper edition.",
-			},
-			"author": map[string]any{
-				"type":        "string",
-				"description": "The editors name.",
-			},
-			"sections": map[string]any{
-				"type":        "array",
-				"description": "The sections of the newspaper edition.",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"title": map[string]any{
-							"type":        "string",
-							"description": "The title of the section.",
-						},
-						"paragraphs": map[string]any{
-							"type":        "array",
-							"description": "Paragraphs of text for this section, including intro and article bodies.",
-							"items": map[string]any{
-								"type": "string",
-							},
-						},
-					},
-					"required": []string{
-						"title",
-						"paragraphs",
-					},
-				},
-			},
-		},
-		"required": []string{
-			"title",
-			"sections",
-		},
-	}
+	return NewspaperDocumentSectionSchema()
 }

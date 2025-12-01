@@ -3,6 +3,7 @@ package newspaper
 import (
 	"context"
 	"log/slog"
+	"os"
 	"sync"
 
 	"github.com/schraf/assistant/pkg/models"
@@ -68,6 +69,9 @@ func GenerateNewspaper(ctx context.Context, assistant models.Assistant, opts New
 	if err != nil {
 		return nil, err
 	}
+
+	doc.Title = "News Report"
+	doc.Author = os.Getenv("TELEGRAPH_AUTHOR_NAME")
 
 	return doc, nil
 }
