@@ -20,7 +20,7 @@ This project provides a **newspaper** content generator that integrates with the
 
 This project is imported by the assistant project and automatically registers the `"newspaper"` generator. The generator can be invoked through the assistant's API endpoints by specifying the generator name and providing:
 
-- `date_range` – human-readable date window for the edition (e.g. `"Nov 28–30, 2025"`).
+- `days_back` – integer number of days in the past to start considering news items from; the end date is always now (e.g. `3` means from three days ago through today).
 - `location` – location used for the Local section (e.g. `"California"`).
 - `research_depth` – integer corresponding to `short`/`medium`/`long` (0, 1, 2).
 
@@ -30,7 +30,7 @@ Build and run the CLI tool:
 
 ```bash
 make build
-./newspaper -date_range "Nov 28–30, 2025" -location "California" -length medium
+./newspaper -days_back 3 -location "California" -length medium
 ```
 
 Length options:

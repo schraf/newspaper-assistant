@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/schraf/assistant/pkg/models"
 )
@@ -103,8 +104,19 @@ func GenerateNewspaperPlan(ctx context.Context, assistant models.Assistant, opts
 		{SectionHealthScience, "Health and Science", "Health, medicine, and scientific discoveries."},
 	}
 
+	// Compute a human-readable date range from DaysBack for prompts and plan metadata.
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -opts.DaysBack)
+
+	var dateRange string
+	if start.Format("2006-01-02") == end.Format("2006-01-02") {
+		dateRange = end.Format("Jan 2, 2006")
+	} else {
+		dateRange = fmt.Sprintf("%s–%s", start.Format("Jan 2, 2006"), end.Format("Jan 2, 2006"))
+	}
+
 	plan := &NewspaperPlan{
-		DateRange: opts.DateRange,
+		DateRange: dateRange,
 		Location:  opts.Location,
 		Sections:  make([]SectionPlan, 0, len(sectionsMeta)),
 	}
@@ -120,7 +132,7 @@ func GenerateNewspaperPlan(ctx context.Context, assistant models.Assistant, opts
 
 		// First, brainstorm candidate stories for this section using Ask().
 		ideasPrompt, err := BuildPrompt(NewspaperSectionIdeasPrompt, PromptArgs{
-			"DateRange":          opts.DateRange,
+			"DateRange":          dateRange,
 			"Length":             length,
 			"SectionType":        string(meta.Type),
 			"SectionDescription": sectionDescription,
@@ -136,7 +148,7 @@ func GenerateNewspaperPlan(ctx context.Context, assistant models.Assistant, opts
 
 		// Then, structure and select the final articles using StructuredAsk().
 		prompt, err := BuildPrompt(NewspaperSectionPlanPrompt, PromptArgs{
-			"DateRange":          opts.DateRange,
+			"DateRange":          dateRange,
 			"Length":             length,
 			"SectionType":        string(meta.Type),
 			"SectionDescription": sectionDescription,

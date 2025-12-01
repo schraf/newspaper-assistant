@@ -12,7 +12,7 @@ import (
 // a complete newspaper-style document for the given options.
 func GenerateNewspaper(ctx context.Context, assistant models.Assistant, opts NewspaperOptions) (*models.Document, error) {
 	slog.InfoContext(ctx, "generating_newspaper",
-		slog.String("date_range", opts.DateRange),
+		slog.Int("days_back", opts.DaysBack),
 		slog.String("location", opts.Location),
 	)
 

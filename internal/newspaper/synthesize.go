@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/schraf/assistant/pkg/models"
 )
@@ -70,9 +71,19 @@ func SynthesizeNewspaper(ctx context.Context, assistant models.Assistant, opts N
 
 	var doc models.Document
 
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -opts.DaysBack)
+
+	var dateRange string
+	if start.Format("2006-01-02") == end.Format("2006-01-02") {
+		dateRange = end.Format("Jan 2, 2006")
+	} else {
+		dateRange = fmt.Sprintf("%s–%s", start.Format("Jan 2, 2006"), end.Format("Jan 2, 2006"))
+	}
+
 	for i, section := range sections {
 		prompt, err := BuildPrompt(NewspaperSynthesizePrompt, PromptArgs{
-			"DateRange": opts.DateRange,
+			"DateRange": dateRange,
 			"Location":  opts.Location,
 			"Sections":  []SectionResearch{section},
 		})

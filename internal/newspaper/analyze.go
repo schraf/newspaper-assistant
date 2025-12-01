@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/schraf/assistant/pkg/models"
 )
@@ -65,10 +66,20 @@ func AnalyzeArticleKnowledge(ctx context.Context, assistant models.Assistant, go
 		slog.String("headline", article.Headline),
 	)
 
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -opts.DaysBack)
+
+	var dateRange string
+	if start.Format("2006-01-02") == end.Format("2006-01-02") {
+		dateRange = end.Format("Jan 2, 2006")
+	} else {
+		dateRange = fmt.Sprintf("%s–%s", start.Format("Jan 2, 2006"), end.Format("Jan 2, 2006"))
+	}
+
 	prompt, err := BuildPrompt(AnalyzeArticleKnowledgePrompt, PromptArgs{
 		"ArticleGoal": goal,
 		"SectionType": string(section.Type),
-		"DateRange":   opts.DateRange,
+		"DateRange":   dateRange,
 		"Location":    opts.Location,
 		"Headline":    article.Headline,
 		"Summary":     article.Summary,

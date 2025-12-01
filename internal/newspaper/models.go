@@ -31,11 +31,9 @@ const (
 
 // NewspaperOptions controls generation of a newspaper edition.
 type NewspaperOptions struct {
-	// Human-readable description of the date range (e.g. "Nov 28–30, 2025").
-	DateRange string
-	// Optional explicit start/end in ISO-8601 (YYYY-MM-DD) for prompts or logging.
-	DateStart string
-	DateEnd   string
+	// DaysBack is the number of days in the past to start considering news from.
+	// The end of the window is always "now" (current date).
+	DaysBack int
 	// Location for the Local section (typically a US state, but can be more general).
 	Location string
 	// Depth/length of the newspaper (short/medium/long).

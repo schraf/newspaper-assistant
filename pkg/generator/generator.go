@@ -38,11 +38,26 @@ func (g *generator) Generate(ctx context.Context, request models.ContentRequest,
 		return nil, fmt.Errorf("invalid research depth")
 	}
 
-	dateRange, _ := request.Body["date_range"].(string)
+	var daysBack int
+	switch v := request.Body["days_back"].(type) {
+	case int:
+		daysBack = v
+	case int64:
+		daysBack = int(v)
+	case float64:
+		daysBack = int(v)
+	default:
+		return nil, fmt.Errorf("no days_back provided (expected positive integer)")
+	}
+
+	if daysBack <= 0 {
+		return nil, fmt.Errorf("invalid days_back %d (must be positive)", daysBack)
+	}
+
 	location, _ := request.Body["location"].(string)
 
 	opts := newspaper.NewspaperOptions{
-		DateRange: dateRange,
+		DaysBack:  daysBack,
 		Location:  location,
 		Depth:     depth,
 	}
