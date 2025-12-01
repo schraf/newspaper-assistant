@@ -20,9 +20,6 @@ const (
 	NewspaperEditPrompt = `
 		# Newspaper Edition to Edit
 
-		## Title
-		{{.Title}}
-
 		## Sections
 
 		{{range $index, $section := .Sections}}
@@ -42,6 +39,8 @@ const (
 		4. Transitions between sections are smooth and logical.
 		5. The overall tone and style are consistent and appropriate for a
 		   newspaper.
+		6. Create a title for the newspaper
+		7. Make up a author name for the newspaper
 
 		Maintain the same structure (title and sections with paragraphs) but
 		refine the content to eliminate redundancy, improve clarity, and enhance
@@ -75,5 +74,48 @@ func EditNewspaper(ctx context.Context, assistant models.Assistant, doc *models.
 }
 
 func EditNewspaperSchema() map[string]any {
-	return NewspaperDocumentSchema()
+	// Preserve the original full-document schema used before synthesis was
+	// changed to operate on a per-section basis. Editing still works on the
+	// complete newspaper document (title + sections).
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"title": map[string]any{
+				"type":        "string",
+				"description": "The title of the newspaper edition.",
+			},
+			"author": map[string]any{
+				"type":        "string",
+				"description": "The editors name.",
+			},
+			"sections": map[string]any{
+				"type":        "array",
+				"description": "The sections of the newspaper edition.",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"title": map[string]any{
+							"type":        "string",
+							"description": "The title of the section.",
+						},
+						"paragraphs": map[string]any{
+							"type":        "array",
+							"description": "Paragraphs of text for this section, including intro and article bodies.",
+							"items": map[string]any{
+								"type": "string",
+							},
+						},
+					},
+					"required": []string{
+						"title",
+						"paragraphs",
+					},
+				},
+			},
+		},
+		"required": []string{
+			"title",
+			"sections",
+		},
+	}
 }
