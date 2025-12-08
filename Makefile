@@ -1,33 +1,33 @@
-all: vet build
+all: deps vet test build
 
-build: vet test
+build:
 	@mkdir -p bin
-	go build -o bin/newspaper ./cmd
+	@go build -o bin/newspaper ./cmd
 
 run:
 	@echo "Running..."
-	go run ./cmd
+	@go run ./cmd
 
 vet:
 	@echo "Vetting code..."
-	go vet ./...
+	@go vet ./...
 
 fmt:
 	@echo "Formatting code..."
-	go fmt ./...
+	@go fmt ./...
 
 test:
 	@echo "Running tests..."
-	go test -v ./...
+	@go test -v ./...
 
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf newspaper
+	@rm -rf bin/newspaper
 
 deps:
 	@echo "Installing dependencies..."
-	go mod download
-	go mod tidy
+	@go mod download
+	@go mod tidy
 
 help:
 	@echo "Available targets:"
