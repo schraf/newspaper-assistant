@@ -9,14 +9,12 @@ import (
 	"github.com/schraf/assistant/pkg/eval"
 	"github.com/schraf/assistant/pkg/generators"
 	"github.com/schraf/assistant/pkg/models"
-	"github.com/schraf/newspaper-assistant/internal/newspaper"
 	_ "github.com/schraf/newspaper-assistant/pkg/generator"
 )
 
 func main() {
 	daysBack := flag.Int("days_back", 1, "Number of days in the past to include (e.g. 3 means from 3 days ago through today)")
 	location := flag.String("location", "", "Location for the Local section (required, e.g. \"California\")")
-	depthString := flag.String("length", "short", "Newspaper length: short, medium, or long (default: short)")
 	model := flag.String("model", "", "Model to use for evaluation")
 	flag.Parse()
 
@@ -32,25 +30,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	var depth newspaper.ResearchDepth
-	switch *depthString {
-	case "short":
-		depth = newspaper.ResearchDepthShort
-	case "medium":
-		depth = newspaper.ResearchDepthMedium
-	case "long":
-		depth = newspaper.ResearchDepthLong
-	default:
-		fmt.Fprintf(os.Stderr, "Error: invalid length '%s'. Must be one of: short, medium, long\n", *depthString)
-		os.Exit(1)
-	}
-
 	// Create request object
 	request := models.ContentRequest{
 		Body: map[string]any{
-			"days_back":      *daysBack,
-			"location":       *location,
-			"research_depth": depth,
+			"days_back": *daysBack,
+			"location":  *location,
 		},
 	}
 
