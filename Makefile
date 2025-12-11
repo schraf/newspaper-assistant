@@ -18,7 +18,7 @@ fmt:
 
 test:
 	@echo "Running tests..."
-	@go test -v ./...
+	@go test -v -race -timeout 10s ./...
 
 clean:
 	@echo "Cleaning build artifacts..."
