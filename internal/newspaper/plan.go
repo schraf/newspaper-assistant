@@ -92,6 +92,10 @@ func (p *Pipeline) PlanSection(ctx context.Context, in <-chan Section, out chan<
 					return fmt.Errorf("generate section plan error: unmarshal json (%s): %w", section.Title, err)
 				}
 
+				if len(articles) > 5 {
+					articles = articles[:5]
+				}
+
 				headlines := []string{}
 
 				for _, article := range articles {
