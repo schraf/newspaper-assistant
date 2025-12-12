@@ -2,28 +2,8 @@ package newspaper
 
 import (
 	"fmt"
-	"regexp"
-	"strings"
 	"time"
 )
-
-var (
-	paragraphPattern *regexp.Regexp
-)
-
-func init() {
-	paragraphPattern = regexp.MustCompile(`\r?\n\s*\r?\n`)
-}
-
-func splitParagraphs(in string) []string {
-	paragraphs := paragraphPattern.Split(in, -1)
-
-	for index, paragraph := range paragraphs {
-		paragraphs[index] = strings.TrimSpace(paragraph)
-	}
-
-	return paragraphs
-}
 
 func dateRangeText(daysBack int) string {
 	end := time.Now().UTC()

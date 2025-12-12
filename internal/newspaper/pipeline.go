@@ -94,12 +94,8 @@ func (p *Pipeline) Exec(ctx context.Context) (*models.Document, error) {
 	}
 
 	for article := range edited {
-		section := models.DocumentSection{
-			Title:      article.Section + ": " + article.Headline,
-			Paragraphs: splitParagraphs(article.Body),
-		}
-
-		doc.Sections = append(doc.Sections, section)
+		title := article.Section + ": " + article.Headline
+		doc.AddSection(title, article.Body)
 	}
 
 	sort.Slice(doc.Sections, func(i, j int) bool {
