@@ -20,7 +20,7 @@ const (
 		{{.DateRange}}
 
 		## Length
-		3 to 5 article ideas
+		3 to 4 article ideas
 
 		## Section
 		Section Title: {{.SectionTitle}}
@@ -28,7 +28,7 @@ const (
 
 		## Task
 		1. Use web searches to brainstorm candidate news stores for only this section of the newspaper
-		2. List more candidate stories than will ultimately be used for this section
+		2. List no more than 4 candidate stories to be used for this section
 		3. For each candidate story, provide:
 			- a working headline
 			- a short description of the event
@@ -92,7 +92,7 @@ func (p *Pipeline) PlanSection(ctx context.Context, in <-chan Section, out chan<
 					return fmt.Errorf("generate section plan error: unmarshal json (%s): %w", section.Title, err)
 				}
 
-				if len(articles) > 5 {
+				if len(articles) > 4 {
 					articles = articles[:5]
 				}
 
