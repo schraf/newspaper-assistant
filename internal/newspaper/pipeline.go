@@ -62,22 +62,27 @@ func (p *Pipeline) Exec(ctx context.Context) (*models.Document, error) {
 
 	close(section)
 
-	articles := make(chan Article, 100)
-	research := make(chan Article, 100)
-	synthesis := make(chan Article, 100)
+	articles := make(chan Article, 30)
+	research := make(chan Article, 30)
+	synthesis := make(chan Article, 30)
+	edited := make(chan Article, 30)
 
 	group, ctx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
-		return p.PlanSection(ctx, section, articles, 10)
+		return p.PlanSection(ctx, section, articles, 3)
 	})
 
 	group.Go(func() error {
-		return p.ResearchArticle(ctx, articles, research, 10)
+		return p.ResearchArticle(ctx, articles, research, 3)
 	})
 
 	group.Go(func() error {
-		return p.SynthesizeArticle(ctx, research, synthesis, 10)
+		return p.SynthesizeArticle(ctx, research, synthesis, 3)
+	})
+
+	group.Go(func() error {
+		return p.EditArticle(ctx, synthesis, edited, 3)
 	})
 
 	if err := group.Wait(); err != nil {
@@ -88,7 +93,7 @@ func (p *Pipeline) Exec(ctx context.Context) (*models.Document, error) {
 		Title: "News Report: " + dateRangeText(p.options.DaysBack),
 	}
 
-	for article := range synthesis {
+	for article := range edited {
 		section := models.DocumentSection{
 			Title:      article.Section + ": " + article.Headline,
 			Paragraphs: splitParagraphs(article.Body),
