@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sort"
 
 	"github.com/schraf/assistant/pkg/models"
 	"golang.org/x/sync/errgroup"
@@ -66,6 +65,7 @@ func (p *Pipeline) Exec(ctx context.Context) (*models.Document, error) {
 	research := make(chan Article, 30)
 	synthesis := make(chan Article, 30)
 	edited := make(chan Article, 30)
+	final := make(chan models.Document, 1)
 
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -85,22 +85,15 @@ func (p *Pipeline) Exec(ctx context.Context) (*models.Document, error) {
 		return p.EditArticle(ctx, synthesis, edited, 3)
 	})
 
+	group.Go(func() error {
+		return p.FinalizeNewspaper(ctx, edited, final)
+	})
+
 	if err := group.Wait(); err != nil {
 		return nil, err
 	}
 
-	doc := models.Document{
-		Title: "News Report: " + dateRangeText(p.options.DaysBack),
-	}
-
-	for article := range edited {
-		title := article.Section + ": " + article.Headline
-		doc.AddSection(title, article.Body)
-	}
-
-	sort.Slice(doc.Sections, func(i, j int) bool {
-		return doc.Sections[i].Title < doc.Sections[j].Title
-	})
+	doc := <-final
 
 	return &doc, nil
 }

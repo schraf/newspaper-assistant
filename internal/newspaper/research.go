@@ -2,9 +2,11 @@ package newspaper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/schraf/assistant/pkg/models"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -52,12 +54,25 @@ func (p *Pipeline) ResearchArticle(ctx context.Context, in <-chan Article, out c
 
 				research, err := p.assistant.Ask(ctx, ResearchSystemPrompt, *prompt)
 				if err != nil {
+					if errors.Is(err, models.ErrContentBlocked) {
+						slog.Warn("research_content_blocked",
+							slog.String("section", article.Section),
+							slog.String("headline", article.Headline),
+						)
+
+						continue
+					}
+
 					return fmt.Errorf("research article error: assistant ask: %w", err)
+				}
+
+				if len(*research) == 0 {
+					return fmt.Errorf("research article error: no research found for '%s': %w", article.Headline, err)
 				}
 
 				article.Research = *research
 
-				slog.Info("resarched_article",
+				slog.Info("researched_article",
 					slog.String("section", article.Section),
 					slog.String("headline", article.Headline),
 					slog.Int("research", len(article.Research)),
