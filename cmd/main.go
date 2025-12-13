@@ -15,7 +15,6 @@ import (
 func main() {
 	daysBack := flag.Int("days_back", 1, "Number of days in the past to include (e.g. 3 means from 3 days ago through today)")
 	location := flag.String("location", "", "Location for the Local section (required, e.g. \"California\")")
-	model := flag.String("model", "", "Model to use for evaluation")
 	flag.Parse()
 
 	if *daysBack <= 0 {
@@ -46,7 +45,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := eval.Evaluate(ctx, generator, request, *model); err != nil {
+	if err := eval.Evaluate(ctx, generator, request, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		os.Exit(1)
 	}

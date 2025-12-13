@@ -12,27 +12,14 @@ const (
 	EditSystemPrompt = `
 		You are an expert editor. Your role is to review newspaper articles and 
 		ensure that each article takes a neutral stance and is clearly written.
+		Remove any Markdown, LaTeX, HTML tags, or any escape characters. The
+		article should not include any headings. 
 		`
 
-	EditPrompt = `
-		# Newspaper Article to Edit
-
-		## Section
-		{{.Section}}
-
-		## Article Headline
-		{{.Headline}}
-
-		## Draft Article
-		{{.Body}}
-
-		# Goal
-		Review and edit this newspaper article to ensure:
-		1. The text flows cohesively in each paragraph
-		2. There is no repetition of content between paragraphs
-		3. The overall article reads as a unified, well-structured article
-		4. The report is no longer than {{.MaxLength}} characters.
-		7. Remove any markdown, LaTeX, HTML tags, or any escape characters.
+	EditShortenSystemPrompt = `
+		You are an expert editor. You role is to reduce the length of a
+		newspaper article to ensure it is not over 2500 characters.
+		The provided article draft is over that limit.
 		`
 )
 
@@ -44,42 +31,42 @@ func (p *Pipeline) EditArticle(ctx context.Context, in <-chan Article, out chan<
 	for i := 0; i < concurrency; i++ {
 		group.Go(func() error {
 			for article := range in {
-				success := false
+				body, err := p.assistant.Ask(ctx, EditSystemPrompt, article.Body)
+				if err != nil {
+					return fmt.Errorf("edit article error: assistant ask: %w", err)
+				}
 
-				for i := 0; i < 5; i++ {
-					prompt, err := BuildPrompt(EditPrompt, PromptArgs{
-						"Section":   article.Section,
-						"Headline":  article.Headline,
-						"Body":      article.Body,
-						"MaxLength": 2500 - (i * 200),
-					})
-					if err != nil {
-						return fmt.Errorf("edit article error: %w", err)
-					}
+				article.Body = *body
+				originalLength := len(article.Body)
+				attempt := 0
 
-					body, err := p.assistant.Ask(ctx, EditSystemPrompt, *prompt)
+				for len(article.Body) > 2500 {
+					attempt++
+
+					body, err := p.assistant.Ask(ctx, EditShortenSystemPrompt, article.Body)
 					if err != nil {
 						return fmt.Errorf("edit article error: assistant ask: %w", err)
 					}
 
-					article.Body = *body
+					if len(*body) < len(article.Body) {
+						article.Body = *body
+					}
 
 					if len(article.Body) <= 2500 {
-						slog.Info("edited_article",
-							slog.String("section", article.Section),
-							slog.String("headline", article.Headline),
-							slog.Int("body", len(article.Body)),
-						)
+						break
+					}
 
-						success = true
-
+					if attempt == 5 {
 						break
 					}
 				}
 
-				if !success {
-					return fmt.Errorf("edit article error: failed to reduce article to be below 2500 characters")
-				}
+				slog.Info("edited_article",
+					slog.String("section", article.Section),
+					slog.String("headline", article.Headline),
+					slog.Int("original_length", originalLength),
+					slog.Int("final_length", len(article.Body)),
+				)
 
 				select {
 				case <-ctx.Done():
