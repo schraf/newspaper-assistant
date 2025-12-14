@@ -24,7 +24,7 @@ func (p *Pipeline) FinalizeNewspaper(ctx context.Context, in <-chan Article, out
 		return doc.Sections[i].Title < doc.Sections[j].Title
 	})
 
-	for doc.Length() > 64000 {
+	for doc.Length() > 60000 {
 		if len(doc.Sections) == 0 {
 			break
 		}
