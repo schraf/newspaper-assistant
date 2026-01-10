@@ -3,6 +3,8 @@ package generator
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/schraf/assistant/pkg/generators"
 	"github.com/schraf/assistant/pkg/models"
@@ -38,15 +40,37 @@ func (g *generator) Generate(ctx context.Context, request models.ContentRequest,
 		return nil, fmt.Errorf("invalid 'max_length' %d (must be positive)", maxLength)
 	}
 
-	location, _ := request.Body["location"].(string)
+	section := newspaper.Section{
+		Title:       strings.TrimSpace(toString(request.Body["section_title"])),
+		Description: strings.TrimSpace(toString(request.Body["section_description"])),
+	}
+
+	if section.Title == "" {
+		return nil, fmt.Errorf("no 'section_title' provided")
+	}
+
+	if section.Description == "" {
+		return nil, fmt.Errorf("no 'section_description' provided")
+	}
 
 	options := newspaper.NewspaperOptions{
 		DaysBack:  daysBack,
-		Location:  location,
 		MaxLength: maxLength,
 	}
 
-	return newspaper.CreateNewspaper(ctx, assistant, options)
+	doc, err := newspaper.CreateNewspaper(ctx, assistant, section, options)
+	if err != nil {
+		return nil, err
+	}
+
+	doc.Title = section.Title + ": " + dateRangeText(daysBack)
+
+	return doc, nil
+}
+
+func toString(value any) string {
+	valueString, _ := value.(string)
+	return valueString
 }
 
 func toInt(value any) (int, bool) {
@@ -60,4 +84,18 @@ func toInt(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func dateRangeText(daysBack int) string {
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -daysBack)
+
+	var dateRange string
+	if start.Format("2006-01-02") == end.Format("2006-01-02") {
+		dateRange = end.Format("Jan 2, 2006")
+	} else {
+		dateRange = fmt.Sprintf("%s to %s", start.Format("Jan 2, 2006"), end.Format("Jan 2, 2006"))
+	}
+
+	return dateRange
 }

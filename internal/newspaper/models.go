@@ -13,7 +13,7 @@ type Section struct {
 
 type Article struct {
 	Valid    bool
-	Section  string
+	Section  Section
 	Headline string
 	Summary  string
 	Research string

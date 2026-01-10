@@ -17,9 +17,10 @@ func TestGenerator(t *testing.T) {
 
 	request := models.ContentRequest{
 		Body: map[string]any{
-			"days_back":  7,
-			"max_length": 1000,
-			"location":   "North Caolina, USA",
+			"days_back":           7,
+			"max_length":          1000,
+			"section_title":       "World News",
+			"section_description": "Significant international events and developments",
 		},
 	}
 
