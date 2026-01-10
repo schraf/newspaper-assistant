@@ -6,7 +6,7 @@ build:
 
 run:
 	@echo "Running..."
-	@go run ./cmd
+	@go run ./cmd -days 7 -length 58000 -title "World News" -description "Significant international events and developments"
 
 vet:
 	@echo "Vetting code..."

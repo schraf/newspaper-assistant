@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
-	"sort"
 	"strings"
 
 	"github.com/schraf/assistant/pkg/models"
@@ -31,25 +30,17 @@ const (
 		## Task
 		Review the list of articles and their lengths. Decide which single article
 		to remove to help bring the total length closer to the maximum, while
-		sacrificing the least amount of important content. Avoid removing articles
-		about local, US, and world news. The list of articles is provided in a 
-		markdown table format.
+		sacrificing the least amount of important content. The list of articles is 
+		provided in a markdown table format.
 		`
 )
 
 func EditNewspaper(ctx context.Context, articles []Article) (*models.Document, error) {
-	doc := models.Document{
-		Title: "News Report: " + dateRangeText(optionsFrom(ctx).DaysBack),
-	}
+	doc := models.Document{}
 
 	for _, article := range articles {
-		title := article.Section + ": " + article.Headline
-		doc.AddSection(title, article.Body)
+		doc.AddSection(article.Headline, article.Body)
 	}
-
-	sort.Slice(doc.Sections, func(i, j int) bool {
-		return doc.Sections[i].Title < doc.Sections[j].Title
-	})
 
 	maxLength := optionsFrom(ctx).MaxLength
 
@@ -65,26 +56,17 @@ func EditNewspaper(ctx context.Context, articles []Article) (*models.Document, e
 		}
 
 		var articlesTable strings.Builder
-		articlesTable.WriteString("| Index | Section | Headline | Length |\n")
-		articlesTable.WriteString("|---|---|---|---|\n")
+		articlesTable.WriteString("| Index | Headline | Length |\n")
+		articlesTable.WriteString("|---|---|---|\n")
 
 		for index, section := range doc.Sections {
-			titleParts := strings.SplitN(section.Title, ":", 2)
-
-			name := strings.TrimSpace(titleParts[0])
-
-			headline := ""
-			if len(titleParts) > 1 {
-				headline = strings.TrimSpace(titleParts[1])
-			}
-
-			sectionLength := 0
+			length := 0
 
 			for _, paragraph := range section.Paragraphs {
-				sectionLength += len(paragraph)
+				length += len(paragraph)
 			}
 
-			articlesTable.WriteString(fmt.Sprintf("| %d | %s | %s | %d |\n", index, name, headline, sectionLength))
+			articlesTable.WriteString(fmt.Sprintf("| %d | %s | %d |\n", index, section.Title, length))
 		}
 
 		prompt, err := BuildPrompt(EditPrompt, PromptArgs{

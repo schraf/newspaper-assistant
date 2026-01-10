@@ -3,13 +3,12 @@ package newspaper
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/schraf/assistant/pkg/models"
 	"github.com/schraf/pipeline"
 )
 
-func CreateNewspaper(ctx context.Context, assistant models.Assistant, options NewspaperOptions) (*models.Document, error) {
+func CreateNewspaper(ctx context.Context, assistant models.Assistant, section Section, options NewspaperOptions) (*models.Document, error) {
 	//--===============================================================--
 	//--== CREATE PIPELINE
 	//--===============================================================--
@@ -23,24 +22,25 @@ func CreateNewspaper(ctx context.Context, assistant models.Assistant, options Ne
 	//--===============================================================--
 
 	// channel capacity size
-	const capacity = 1
+	const capacity = 2
 
 	//--===============================================================--
-	//--== STAGE 0 : SOURCE NEWSPAPER SECTIONS
+	//--== STAGE 0 : SOURCE NEWSPAPER SECTION
 	//--===============================================================--
 
-	stage0 := make(chan Section, capacity)
-	pipeline.SourceSlice(pipe, slices.Values(CreateSections(options)), stage0)
+	stage0 := make(chan Section, 1)
+	stage0 <- section
+	close(stage0)
 
 	//--===============================================================--
-	//--== STAGE 1 : PLAN ARTICLES FOR EACH SECTION
+	//--== STAGE 1 : PLAN ARTICLES FOR SECTION
 	//--===============================================================--
 
 	stage1 := make(chan []Article, capacity)
 	pipeline.Transform(pipe, Plan, stage0, stage1)
 
 	//--===============================================================--
-	//--== STAGE 2 : FLATTEN ARTICLES FROM EACH SECTION
+	//--== STAGE 2 : FLATTEN ALL ARTICLES
 	//--===============================================================--
 
 	stage2 := make(chan Article, capacity)

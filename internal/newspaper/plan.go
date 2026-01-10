@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 		{{.DateRange}}
 
 		## Length
-		3 to 6 article ideas
+		8 to 10 article ideas
 
 		## Section
 		Section Title: {{.SectionTitle}}
@@ -26,7 +27,7 @@ const (
 
 		## Task
 		1. Use web searches to brainstorm candidate news stores for only this section of the newspaper
-		2. List no more than 6 candidate stories to be used for this section
+		2. List no more than 10 candidate stories to be used for this section
 		3. For each candidate story, provide:
 			- a working headline
 			- a short description of the event
@@ -35,7 +36,9 @@ const (
 )
 
 func Plan(ctx context.Context, section Section) (*[]Article, error) {
-	dateRange := dateRangeText(optionsFrom(ctx).DaysBack)
+	endTime := time.Now().UTC()
+	startTime := endTime.AddDate(0, 0, -optionsFrom(ctx).DaysBack)
+	dateRange := fmt.Sprintf("%s to %s", startTime.Format("Jan 2, 2006"), endTime.Format("Jan 2, 2006"))
 
 	prompt, err := BuildPrompt(SectionPlanPrompt, PromptArgs{
 		"DateRange":          dateRange,
@@ -83,20 +86,19 @@ func Plan(ctx context.Context, section Section) (*[]Article, error) {
 		return nil, fmt.Errorf("generate section plan error: unmarshal json (%s): %w", section.Title, err)
 	}
 
-	headlines := []string{}
-
-	for index, article := range articles {
-		headlines = append(headlines, article.Headline)
-
-		articles[index].Valid = true
-		articles[index].Section = section.Title
+	if len(articles) == 0 {
+		return nil, fmt.Errorf("generate section plan error: no articles generated for section %s", section.Title)
 	}
 
-	slog.Info("generated_section_articles",
-		slog.String("section", section.Title),
-		slog.Int("articles", len(articles)),
-		slog.Any("headlines", headlines),
-	)
+	for index := 0; index < len(articles); index++ {
+		articles[index].Valid = true
+		articles[index].Section = section
+
+		slog.Info("generated_section_article",
+			slog.String("section", section.Title),
+			slog.Any("headline", articles[index].Headline),
+		)
+	}
 
 	return &articles, nil
 }

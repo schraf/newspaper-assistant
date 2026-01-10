@@ -36,7 +36,7 @@ const (
 
 func ResearchArticle(ctx context.Context, article Article) (*Article, error) {
 	prompt, err := BuildPrompt(ResearchPrompt, PromptArgs{
-		"Section":  article.Section,
+		"Section":  article.Section.Title,
 		"Headline": article.Headline,
 		"Summary":  article.Summary,
 	})
@@ -48,14 +48,14 @@ func ResearchArticle(ctx context.Context, article Article) (*Article, error) {
 	if err != nil {
 		if errors.Is(err, models.ErrContentBlocked) {
 			slog.Warn("research_content_blocked",
-				slog.String("section", article.Section),
+				slog.String("section", article.Section.Title),
 				slog.String("headline", article.Headline),
 			)
 
 			article.Valid = false
 		} else {
 			slog.Warn("research_failed",
-				slog.String("section", article.Section),
+				slog.String("section", article.Section.Title),
 				slog.String("headline", article.Headline),
 				slog.String("error", err.Error()),
 			)
@@ -65,7 +65,7 @@ func ResearchArticle(ctx context.Context, article Article) (*Article, error) {
 	} else {
 		if len(*research) == 0 {
 			slog.Warn("empty_research",
-				slog.String("section", article.Section),
+				slog.String("section", article.Section.Title),
 				slog.String("headline", article.Headline),
 			)
 
@@ -75,7 +75,7 @@ func ResearchArticle(ctx context.Context, article Article) (*Article, error) {
 			article.Research = *research
 
 			slog.Info("researched_article",
-				slog.String("section", article.Section),
+				slog.String("section", article.Section.Title),
 				slog.String("headline", article.Headline),
 				slog.Int("research", len(article.Research)),
 			)
