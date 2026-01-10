@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"github.com/schraf/assistant/pkg/models"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -35,59 +34,53 @@ const (
 		`
 )
 
-func (p *Pipeline) ResearchArticle(ctx context.Context, in <-chan Article, out chan<- Article, concurrency int) error {
-	defer close(out)
-
-	group, ctx := errgroup.WithContext(ctx)
-
-	for i := 0; i < concurrency; i++ {
-		group.Go(func() error {
-			for article := range in {
-				prompt, err := BuildPrompt(ResearchPrompt, PromptArgs{
-					"Section":  article.Section,
-					"Headline": article.Headline,
-					"Summary":  article.Summary,
-				})
-				if err != nil {
-					return fmt.Errorf("research article error: %w", err)
-				}
-
-				research, err := p.assistant.Ask(ctx, ResearchSystemPrompt, *prompt)
-				if err != nil {
-					if errors.Is(err, models.ErrContentBlocked) {
-						slog.Warn("research_content_blocked",
-							slog.String("section", article.Section),
-							slog.String("headline", article.Headline),
-						)
-
-						continue
-					}
-
-					return fmt.Errorf("research article error: assistant ask: %w", err)
-				}
-
-				if len(*research) == 0 {
-					return fmt.Errorf("research article error: no research found for '%s': %w", article.Headline, err)
-				}
-
-				article.Research = *research
-
-				slog.Info("researched_article",
-					slog.String("section", article.Section),
-					slog.String("headline", article.Headline),
-					slog.Int("research", len(article.Research)),
-				)
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case out <- article:
-				}
-			}
-
-			return nil
-		})
+func ResearchArticle(ctx context.Context, article Article) (*Article, error) {
+	prompt, err := BuildPrompt(ResearchPrompt, PromptArgs{
+		"Section":  article.Section,
+		"Headline": article.Headline,
+		"Summary":  article.Summary,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("research prompt error: %w", err)
 	}
 
-	return group.Wait()
+	research, err := ask(ctx, ResearchSystemPrompt, *prompt)
+	if err != nil {
+		if errors.Is(err, models.ErrContentBlocked) {
+			slog.Warn("research_content_blocked",
+				slog.String("section", article.Section),
+				slog.String("headline", article.Headline),
+			)
+
+			article.Valid = false
+		} else {
+			slog.Warn("research_failed",
+				slog.String("section", article.Section),
+				slog.String("headline", article.Headline),
+				slog.String("error", err.Error()),
+			)
+
+			article.Valid = false
+		}
+	} else {
+		if len(*research) == 0 {
+			slog.Warn("empty_research",
+				slog.String("section", article.Section),
+				slog.String("headline", article.Headline),
+			)
+
+			article.Valid = false
+		} else {
+			article.Valid = true
+			article.Research = *research
+
+			slog.Info("researched_article",
+				slog.String("section", article.Section),
+				slog.String("headline", article.Headline),
+				slog.Int("research", len(article.Research)),
+			)
+		}
+	}
+
+	return &article, nil
 }

@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -36,88 +34,69 @@ const (
 		`
 )
 
-func (p *Pipeline) PlanSection(ctx context.Context, in <-chan Section, out chan<- Article, concurrency int) error {
-	defer close(out)
+func Plan(ctx context.Context, section Section) (*[]Article, error) {
+	dateRange := dateRangeText(optionsFrom(ctx).DaysBack)
 
-	group, ctx := errgroup.WithContext(ctx)
-
-	for i := 0; i < concurrency; i++ {
-		group.Go(func() error {
-			for section := range in {
-				dateRange := dateRangeText(p.options.DaysBack)
-
-				prompt, err := BuildPrompt(SectionPlanPrompt, PromptArgs{
-					"DateRange":          dateRange,
-					"SectionTitle":       section.Title,
-					"SectionDescription": section.Description,
-				})
-				if err != nil {
-					return fmt.Errorf("generate section plan error (%s): %w", section.Title, err)
-				}
-
-				response, err := p.assistant.Ask(ctx, SectionPlanSystemPrompt, *prompt)
-				if err != nil {
-					return fmt.Errorf("generate section plan error: assistant ask (%s): %w", section.Title, err)
-				}
-
-				schema := map[string]any{
-					"type":        "array",
-					"description": "list of articles",
-					"items": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"headline": map[string]any{
-								"type":        "string",
-								"description": "headline of the article",
-							},
-							"summary": map[string]any{
-								"type":        "string",
-								"description": "summary of the article",
-							},
-						},
-						"required": []string{"headline", "summary"},
-					},
-				}
-
-				structuredPrompt := "Extract the list of articles from the following text.\n" + *response
-
-				responseJson, err := p.assistant.StructuredAsk(ctx, SectionPlanSystemPrompt, structuredPrompt, schema)
-				if err != nil {
-					return fmt.Errorf("generate section plan error: assistant structured ask (%s): %w", section.Title, err)
-				}
-
-				var articles []Article
-
-				if err := json.Unmarshal(responseJson, &articles); err != nil {
-					return fmt.Errorf("generate section plan error: unmarshal json (%s): %w", section.Title, err)
-				}
-
-				headlines := []string{}
-
-				for _, article := range articles {
-					headlines = append(headlines, article.Headline)
-				}
-
-				slog.InfoContext(ctx, "generated_section_articles",
-					slog.String("section", section.Title),
-					slog.Int("articles", len(articles)),
-					slog.Any("headlines", headlines),
-				)
-
-				for _, article := range articles {
-					article.Section = section.Title
-
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case out <- article:
-					}
-				}
-			}
-
-			return nil
-		})
+	prompt, err := BuildPrompt(SectionPlanPrompt, PromptArgs{
+		"DateRange":          dateRange,
+		"SectionTitle":       section.Title,
+		"SectionDescription": section.Description,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("generate section plan error (%s): %w", section.Title, err)
 	}
 
-	return group.Wait()
+	response, err := ask(ctx, SectionPlanSystemPrompt, *prompt)
+	if err != nil {
+		return nil, fmt.Errorf("generate section plan error: assistant ask (%s): %w", section.Title, err)
+	}
+
+	schema := map[string]any{
+		"type":        "array",
+		"description": "list of articles",
+		"items": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"headline": map[string]any{
+					"type":        "string",
+					"description": "headline of the article",
+				},
+				"summary": map[string]any{
+					"type":        "string",
+					"description": "summary of the article",
+				},
+			},
+			"required": []string{"headline", "summary"},
+		},
+	}
+
+	structuredPrompt := "Extract the list of articles from the following text.\n" + *response
+
+	responseJson, err := structuredAsk(ctx, SectionPlanSystemPrompt, structuredPrompt, schema)
+	if err != nil {
+		return nil, fmt.Errorf("generate section plan error: assistant structured ask (%s): %w", section.Title, err)
+	}
+
+	var articles []Article
+
+	if err := json.Unmarshal(responseJson, &articles); err != nil {
+		return nil, fmt.Errorf("generate section plan error: unmarshal json (%s): %w", section.Title, err)
+	}
+
+	headlines := []string{}
+
+	for index, article := range articles {
+		headlines = append(headlines, article.Headline)
+
+		articles[index].Valid = true
+		articles[index].Section = section.Title
+	}
+
+	slog.Info("generated_section_articles",
+		slog.String("section", section.Title),
+		slog.Int("articles", len(articles)),
+		slog.Any("headlines", headlines),
+	)
+
+	return &articles, nil
 }
