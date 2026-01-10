@@ -5,9 +5,9 @@ go 1.24.0
 toolchain go1.24.9
 
 require (
-	github.com/schraf/assistant v1.0.6
+	github.com/schraf/assistant v1.0.7
+	github.com/schraf/pipeline v1.4.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sync v0.18.0
 )
 
 require (
@@ -25,6 +25,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.15.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/schraf/syncext v1.0.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
@@ -32,6 +33,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/net v0.46.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/genai v1.36.0 // indirect

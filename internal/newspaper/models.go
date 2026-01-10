@@ -1,8 +1,9 @@
 package newspaper
 
 type NewspaperOptions struct {
-	DaysBack int
-	Location string
+	DaysBack  int
+	MaxLength int
+	Location  string
 }
 
 type Section struct {
@@ -11,6 +12,7 @@ type Section struct {
 }
 
 type Article struct {
+	Valid    bool
 	Section  string
 	Headline string
 	Summary  string

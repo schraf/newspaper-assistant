@@ -2,10 +2,7 @@ package newspaper
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -19,37 +16,26 @@ const (
 		`
 )
 
-func (p *Pipeline) SynthesizeArticle(ctx context.Context, in <-chan Article, out chan<- Article, concurrency int) error {
-	defer close(out)
+func SynthesizeArticle(ctx context.Context, article Article) (*Article, error) {
+	body, err := ask(ctx, SynthesizeSystemPrompt, article.Research)
+	if err != nil {
+		slog.Warn("synthesizing_article_failed",
+			slog.String("section", article.Section),
+			slog.String("headline", article.Headline),
+			slog.String("error", err.Error()),
+		)
 
-	group, ctx := errgroup.WithContext(ctx)
+		article.Valid = false
+	} else {
+		article.Valid = true
+		article.Body = *body
 
-	for i := 0; i < concurrency; i++ {
-		group.Go(func() error {
-			for article := range in {
-				body, err := p.assistant.Ask(ctx, SynthesizeSystemPrompt, article.Research)
-				if err != nil {
-					return fmt.Errorf("synthesize article error: assistant ask: %w", err)
-				}
-
-				article.Body = *body
-
-				slog.Info("synthesized_article",
-					slog.String("section", article.Section),
-					slog.String("headline", article.Headline),
-					slog.Int("body", len(article.Body)),
-				)
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case out <- article:
-				}
-			}
-
-			return nil
-		})
+		slog.Info("synthesized_article",
+			slog.String("section", article.Section),
+			slog.String("headline", article.Headline),
+			slog.Int("body", len(article.Body)),
+		)
 	}
 
-	return group.Wait()
+	return &article, nil
 }

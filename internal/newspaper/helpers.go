@@ -1,6 +1,7 @@
 package newspaper
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -17,4 +18,8 @@ func dateRangeText(daysBack int) string {
 	}
 
 	return dateRange
+}
+
+func filterValidArticles(ctx context.Context, article Article) (bool, error) {
+	return article.Valid, nil
 }

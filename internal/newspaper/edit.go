@@ -2,82 +2,154 @@ package newspaper
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"sort"
+	"strings"
 
-	"golang.org/x/sync/errgroup"
+	"github.com/schraf/assistant/pkg/models"
 )
 
 const (
 	EditSystemPrompt = `
-		You are an expert editor. Your role is to review newspaper articles and 
-		ensure that each article takes a neutral stance and is clearly written.
-		Remove any Markdown, LaTeX, HTML tags, or any escape characters. The
-		article should not include any headings. 
+		You are an expert newspaper editor. Your task is to trim down the newspaper
+		to fit within a specific length, while retaining the most important articles.
 		`
 
-	EditShortenSystemPrompt = `
-		You are an expert editor. You role is to reduce the length of a
-		newspaper article to ensure it is not over 2500 characters.
-		The provided article draft is over that limit.
+	EditPrompt = `
+		## Max Length
+		{{.MaxLength}}
+
+		## Current Length
+		{{.CurrentLength}}
+
+		## Articles
+		{{.Articles}}
+
+		## Task
+		Review the list of articles and their lengths. Decide which single article
+		to remove to help bring the total length closer to the maximum, while
+		sacrificing the least amount of important content. Avoid removing articles
+		about local, US, and world news. The list of articles is provided in a 
+		markdown table format.
 		`
 )
 
-func (p *Pipeline) EditArticle(ctx context.Context, in <-chan Article, out chan<- Article, concurrency int) error {
-	defer close(out)
-
-	group, ctx := errgroup.WithContext(ctx)
-
-	for i := 0; i < concurrency; i++ {
-		group.Go(func() error {
-			for article := range in {
-				body, err := p.assistant.Ask(ctx, EditSystemPrompt, article.Body)
-				if err != nil {
-					return fmt.Errorf("edit article error: assistant ask: %w", err)
-				}
-
-				article.Body = *body
-				originalLength := len(article.Body)
-				attempt := 0
-
-				for len(article.Body) > 2500 {
-					attempt++
-
-					body, err := p.assistant.Ask(ctx, EditShortenSystemPrompt, article.Body)
-					if err != nil {
-						return fmt.Errorf("edit article error: assistant ask: %w", err)
-					}
-
-					if len(*body) < len(article.Body) {
-						article.Body = *body
-					}
-
-					if len(article.Body) <= 2500 {
-						break
-					}
-
-					if attempt == 5 {
-						break
-					}
-				}
-
-				slog.Info("edited_article",
-					slog.String("section", article.Section),
-					slog.String("headline", article.Headline),
-					slog.Int("original_length", originalLength),
-					slog.Int("final_length", len(article.Body)),
-				)
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case out <- article:
-				}
-			}
-
-			return nil
-		})
+func EditNewspaper(ctx context.Context, articles []Article) (*models.Document, error) {
+	doc := models.Document{
+		Title: "News Report: " + dateRangeText(optionsFrom(ctx).DaysBack),
 	}
 
-	return group.Wait()
+	for _, article := range articles {
+		title := article.Section + ": " + article.Headline
+		doc.AddSection(title, article.Body)
+	}
+
+	sort.Slice(doc.Sections, func(i, j int) bool {
+		return doc.Sections[i].Title < doc.Sections[j].Title
+	})
+
+	maxLength := optionsFrom(ctx).MaxLength
+
+	slog.Info("editing_start",
+		slog.Int("articles", len(articles)),
+		slog.Int("length", doc.Length()),
+		slog.Int("max_length", maxLength),
+	)
+
+	for doc.Length() > maxLength {
+		if len(doc.Sections) == 0 {
+			break
+		}
+
+		var articlesTable strings.Builder
+		articlesTable.WriteString("| Index | Section | Headline | Length |\n")
+		articlesTable.WriteString("|---|---|---|---|\n")
+
+		for index, section := range doc.Sections {
+			titleParts := strings.SplitN(section.Title, ":", 2)
+
+			name := strings.TrimSpace(titleParts[0])
+
+			headline := ""
+			if len(titleParts) > 1 {
+				headline = strings.TrimSpace(titleParts[1])
+			}
+
+			sectionLength := 0
+
+			for _, paragraph := range section.Paragraphs {
+				sectionLength += len(paragraph)
+			}
+
+			articlesTable.WriteString(fmt.Sprintf("| %d | %s | %s | %d |\n", index, name, headline, sectionLength))
+		}
+
+		prompt, err := BuildPrompt(EditPrompt, PromptArgs{
+			"MaxLength":     maxLength,
+			"CurrentLength": doc.Length(),
+			"Articles":      articlesTable.String(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("edit newspaper prompt error: %w", err)
+		}
+
+		schema := map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"index": map[string]any{
+					"type":        "integer",
+					"description": "The index of the article to remove from the list.",
+				},
+			},
+			"required": []string{"index"},
+		}
+
+		var sectionToRemove struct{ Index int }
+
+		responseJson, err := structuredAsk(ctx, EditSystemPrompt, *prompt, schema)
+		if err != nil {
+			slog.Warn("edit_ask_failed",
+				slog.String("error", err.Error()),
+			)
+
+			sectionToRemove.Index = rand.Intn(len(doc.Sections))
+		} else {
+			if err := json.Unmarshal(responseJson, &sectionToRemove); err != nil {
+				slog.Warn("edit_ask_unmarshal_failed",
+					slog.String("error", err.Error()),
+				)
+
+				sectionToRemove.Index = rand.Intn(len(doc.Sections))
+			} else {
+				if sectionToRemove.Index < 0 || sectionToRemove.Index >= len(doc.Sections) {
+					slog.Warn("edit_ask_index_invalid",
+						slog.Int("index", sectionToRemove.Index),
+					)
+
+					sectionToRemove.Index = rand.Intn(len(doc.Sections))
+				}
+			}
+		}
+
+		removedArticleTitle := doc.Sections[sectionToRemove.Index].Title
+		doc.Sections = append(doc.Sections[:sectionToRemove.Index], doc.Sections[sectionToRemove.Index+1:]...)
+
+		slog.Info("removed article",
+			slog.String("removed_article_title", removedArticleTitle),
+			slog.Int("remaining_articles", len(doc.Sections)),
+			slog.Int("length", doc.Length()),
+			slog.Int("max_length", maxLength),
+		)
+	}
+
+	slog.Info("editing_finished",
+		slog.Int("articles", len(doc.Sections)),
+		slog.Int("length", doc.Length()),
+		slog.Int("max_length", maxLength),
+	)
+
+	return &doc, nil
 }
