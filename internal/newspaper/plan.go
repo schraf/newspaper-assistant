@@ -5,18 +5,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 )
 
 const (
 	SectionPlanSystemPrompt = `
 		You are an expert newspaper editor and news planner. Your task is to
 		evaluate news stories for a single newspaper section.
+
+		The user will provide a Date Range. Treat it as a hard constraint:
+		only propose stories whose primary event/development occurred within
+		the Date Range (inclusive). If you cannot verify the timing is within
+		range, do not include the story.
 		`
 
 	SectionPlanPrompt = `
 		## Date Range
 		{{.DateRange}}
+
+		IMPORTANT: The Date Range is a hard constraint (inclusive). Only consider events, developments, and data points that occurred within the Date Range. If you cannot clearly verify that an event happened within the Date Range, do not include it.
 
 		## Length
 		8 to 10 article ideas
@@ -26,19 +32,20 @@ const (
 		Description: {{.SectionDescription}}
 
 		## Task
-		1. Use web searches to brainstorm candidate news stores for only this section of the newspaper
-		2. List no more than 10 candidate stories to be used for this section
-		3. For each candidate story, provide:
+		1. Use web searches to brainstorm candidate news stories for only this section of the newspaper
+		2. Only propose stories where the primary event/development occurred within the Date Range (inclusive)
+		3. If a story spans a longer timeline, only include it if there was a significant, date-verifiable development within the Date Range; otherwise exclude it
+		4. Avoid background/history outside the Date Range; do not select anniversary pieces, retrospectives, or "in previous years" recaps
+		5. List no more than 10 candidate stories to be used for this section
+		6. For each candidate story, provide:
 			- a working headline
-			- a short description of the event
+			- a short description of the event (include the specific in-range date or in-range time window in the description)
 		Present the result in a clear, readable text format. Do not use any HTML, markdown, or JSON.
 		`
 )
 
 func Plan(ctx context.Context, section Section) (*[]Article, error) {
-	endTime := time.Now().UTC()
-	startTime := endTime.AddDate(0, 0, -optionsFrom(ctx).DaysBack)
-	dateRange := fmt.Sprintf("%s to %s", startTime.Format("Jan 2, 2006"), endTime.Format("Jan 2, 2006"))
+	dateRange := dateRangeString(ctx)
 
 	prompt, err := BuildPrompt(SectionPlanPrompt, PromptArgs{
 		"DateRange":          dateRange,
